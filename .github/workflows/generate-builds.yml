@@ -88,7 +88,7 @@ jobs:
     - name: Install gtar wrapper
       run: |
         sudo mv /opt/homebrew/bin/gtar /opt/homebrew/bin/gtar.orig
-        sudo cp .github/workflows//gtar /opt/homebrew/bin/gtar
+        sudo cp .github/workflows/gtar /opt/homebrew/bin/gtar
         sudo chmod +x /opt/homebrew/bin/gtar
     - name: Cache MacPorts
       id: cache-macports
@@ -274,7 +274,7 @@ jobs:
       env: 
         VCPKG_ROOT: ${{github.workspace}}/vcpkg
       run: |
-        set $env:PATH="$env:USERPROFILE/.cargo/bin;$env:PATH"
+        $env:PATH="$env:USERPROFILE/.cargo/bin;$env:PATH"
         cmake -S . -B build-windows -G Ninja -DCMAKE_MAKE_PROGRAM=ninja -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DBUILD_REMOTE_CONTROL=1
         cmake --build build-windows --config Release --parallel 10
 
