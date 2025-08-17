@@ -326,16 +326,16 @@ endif()
 # Find/download Boost
 ################################################################################
 cmake_policy(SET CMP0167 OLD)
-find_package(Boost 1.83)
+find_package(Boost 1.83 REQUIRED)
 if(NOT Boost_FOUND)
   message(STATUS "Boost not found. Downloading now...")
   include(FetchContent)
-  set(FETCHCONTENT_QUIET OFF) # Enable verbose output
+  set(FETCHCONTENT_QUIET OFF)
   FetchContent_Declare(
     Boost
     URL https://boostorg.jfrog.io/artifactory/main/release/1.85.0/source/boost_1_85_0.tar.gz
     URL_HASH SHA256=be0d91732d5b0e5c470999b507a61fadd0330e8b6b2b8e7b2da39fa8c0a2d310
-    SOURCE_SUBDIR "null" # Prevent building Boost
+    SOURCE_SUBDIR "null"
     DOWNLOAD_EXTRACT_TIMESTAMP false
   )
   FetchContent_MakeAvailable(Boost)
