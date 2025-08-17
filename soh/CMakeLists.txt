@@ -325,28 +325,25 @@ endif()
 ################################################################################
 # Find/download Boost
 ################################################################################
-include(FetchContent)
-FetchContent_Declare(
+cmake_policy(SET CMP0167 OLD)
+find_package(Boost 1.83)
+if(NOT Boost_FOUND)
+  message(STATUS "Boost not found. Downloading now...")
+  include(FetchContent)
+  set(FETCHCONTENT_QUIET OFF) # Enable verbose output
+  FetchContent_Declare(
     Boost
-    URL      https://boostorg.jfrog.io/artifactory/main/release/1.81.0/source/boost_1_81_0.tar.gz
-    URL_HASH SHA256=205666dea9f6a7cfed87c7a6dfbeb52a2c1b9de55712c9c1a87735d7181452b6
-    SOURCE_SUBDIR "null" # Set to a nonexistent directory so boost is not built (we don't need to build it)
-    DOWNLOAD_EXTRACT_TIMESTAMP false # supress timestamp warning, not needed since the url wont change
-)
-
-set(Boost_NO_BOOST_CMAKE false)
-set(BOOST_INCLUDEDIR ${FETCHCONTENT_BASE_DIR}/boost-src) # Location where FetchContent stores the source
-message("Searching for Boost installation")
-find_package(Boost)
-
-if (NOT ${Boost_FOUND})
-    message("Boost not found. Downloading now...")
-    FetchContent_MakeAvailable(Boost)
-    message("Boost downloaded to " ${FETCHCONTENT_BASE_DIR}/boost-src)
-    set(BOOST-INCLUDE ${FETCHCONTENT_BASE_DIR}/boost-src)
+    URL https://boostorg.jfrog.io/artifactory/main/release/1.85.0/source/boost_1_85_0.tar.gz
+    URL_HASH SHA256=be0d91732d5b0e5c470999b507a61fadd0330e8b6b2b8e7b2da39fa8c0a2d310
+    SOURCE_SUBDIR "null" # Prevent building Boost
+    DOWNLOAD_EXTRACT_TIMESTAMP false
+  )
+  FetchContent_MakeAvailable(Boost)
+  message(STATUS "Boost downloaded to ${FETCHCONTENT_BASE_DIR}/boost-src")
+  set(BOOST-INCLUDE ${FETCHCONTENT_BASE_DIR}/boost-src)
 else()
-    message("Boost found in " ${Boost_INCLUDE_DIRS})
-    set(BOOST-INCLUDE ${Boost_INCLUDE_DIRS})
+  message(STATUS "Found Boost: ${Boost_VERSION} at ${Boost_INCLUDE_DIRS}")
+  set(BOOST-INCLUDE ${Boost_INCLUDE_DIRS})
 endif()
 ################################################################################
 # Compile definitions

@@ -16,23 +16,19 @@ jobs:
       uses: hendrikmuhs/ccache-action@v1.2
       with:
         key: ${{ runner.os }}-soh-otr-ccache
-    - name: Cache Boost
-      id: cache-boost
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/boost
-        key: boost-1.85.0-${{ hashFiles('ZAPDTR/ZAPD/CMakeLists.txt') }}
-        restore-keys: |
-          boost-1.85.0-
     - name: Debug apt-deps.txt
       if: ${{ !vars.LINUX_RUNNER }}
       run: |
         cat .github/workflows/apt-deps.txt
+    - name: Check Python
+      if: ${{ !vars.LINUX_RUNNER }}
+      run: |
+        python3 --version
     - name: Install dependencies
       if: ${{ !vars.LINUX_RUNNER }}
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential libbz2-dev python3-dev zlib1g-dev $(cat .github/workflows/apt-deps.txt)
+        sudo apt-get install -y build-essential libbz2-dev python3-dev zlib1g-dev libboost-all-dev $(cat .github/workflows/apt-deps.txt)
     - name: Check Boost version
       if: ${{ !vars.LINUX_RUNNER }}
       run: |
@@ -51,7 +47,7 @@ jobs:
     - name: Generate soh.otr
       run: |
         export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-        cmake --no-warn-unused-cli -H. -Bbuild-cmake -GNinja -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DFETCHCONTENT_SOURCE_DIR_BOOST=~/.cache/boost
+        cmake --no-warn-unused-cli -H. -Bbuild-cmake -GNinja -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
         cmake --build build-cmake --config Release --target GenerateSohOtr --verbose
     - uses: actions/upload-artifact@v4
       with:
