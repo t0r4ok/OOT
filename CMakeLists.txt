@@ -32,6 +32,12 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     endif()
     message("${CMAKE_VS_PLATFORM_NAME} architecture in use")
 
+    include(CMake/automate-vcpkg.cmake)
+    set(VCPKG_TRIPLET x64-windows-static)
+    set(VCPKG_TARGET_TRIPLET x64-windows-static)
+    vcpkg_bootstrap()
+    vcpkg_install_packages(zlib bzip2 libpng sdl2 sdl2-net glew glfw3 boost)
+
     if(NOT ("${CMAKE_VS_PLATFORM_NAME}" STREQUAL "x64"
         OR "${CMAKE_VS_PLATFORM_NAME}" STREQUAL "Win32"))
         message(FATAL_ERROR "${CMAKE_VS_PLATFORM_NAME} arch is not supported!")
