@@ -7,141 +7,233 @@ concurrency:
   cancel-in-progress: true
 jobs:
   generate-soh-otr:
-    runs-on: ${{ (vars.LINUX_RUNNER && fromJSON(vars.LINUX_RUNNER)) || 'ubuntu-latest' }}
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: true
     - name: ccache
-      uses: hendrikmuhs/ccache-action@v1.2
+      uses: hendrikmuhs/ccache-action@v1.2.14
       with:
-        key: ${{ runner.os }}-soh-otr-ccache
-    - name: Debug apt-deps.txt
-      if: ${{ !vars.LINUX_RUNNER }}
-      run: |
-        cat .github/workflows/apt-deps.txt
-    - name: Check Python
-      if: ${{ !vars.LINUX_RUNNER }}
-      run: |
-        python3 --version
+        key: ${{ runner.os }}-otr-ccache-${{ github.ref }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-otr-ccache-${{ github.ref }}
+          ${{ runner.os }}-otr-ccache-
     - name: Install dependencies
-      if: ${{ !vars.LINUX_RUNNER }}
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential libbz2-dev python3-dev zlib1g-dev libboost-all-dev $(cat .github/workflows/apt-deps.txt)
-    - name: Check Boost version
-      if: ${{ !vars.LINUX_RUNNER }}
-      run: |
-        apt-cache policy libboost-all-dev
+        sudo apt-get install -y $(cat .github/workflows/apt-deps.txt) libzip-dev zipcmp zipmerge ziptool
+    - name: Cache build folders
+      uses: actions/cache@v4
+      with:
+        key: ${{ runner.os }}-otr-build-${{ github.ref }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-otr-build-${{ github.ref }}
+          ${{ runner.os }}-otr-build-
+        path: |
+          build-cmake
+          SDL2-2.30.3
+          tinyxml2-10.0.0
     - name: Install latest SDL
-      if: ${{ !vars.LINUX_RUNNER }}
       run: |
         export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-        wget https://www.libsdl.org/release/SDL2-2.26.1.tar.gz
-        tar -xzf SDL2-2.26.1.tar.gz
-        cd SDL2-2.26.1
-        ./configure
+        if [ ! -d "SDL2-2.30.3" ]; then
+          wget https://www.libsdl.org/release/SDL2-2.30.3.tar.gz
+          tar -xzf SDL2-2.30.3.tar.gz
+        fi
+        cd SDL2-2.30.3
+        ./configure --enable-hidapi-libusb
         make -j 10
         sudo make install
         sudo cp -av /usr/local/lib/libSDL* /lib/x86_64-linux-gnu/
+    - name: Install latest tinyxml2
+      run: |
+        sudo apt-get remove libtinyxml2-dev
+        export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+        if [ ! -d "tinyxml2-10.0.0" ]; then
+          wget https://github.com/leethomason/tinyxml2/archive/refs/tags/10.0.0.tar.gz
+          tar -xzf 10.0.0.tar.gz
+        fi
+        cd tinyxml2-10.0.0
+        mkdir -p build
+        cd build
+        cmake ..
+        make
+        sudo make install
     - name: Generate soh.otr
       run: |
         export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
-        cmake --no-warn-unused-cli -H. -Bbuild-cmake -GNinja -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
-        cmake --build build-cmake --config Release --target GenerateSohOtr --verbose
+        cmake --no-warn-unused-cli -H. -Bbuild-cmake -GNinja -DCMAKE_BUILD_TYPE:STRING=Release
+        cmake --build build-cmake --config Release --target GenerateSohOtr
     - uses: actions/upload-artifact@v4
       with:
         name: soh.otr
         path: soh.otr
         retention-days: 1
-  build-linux:
+  build-macos:
     needs: generate-soh-otr
-    strategy:
-      fail-fast: true
-      matrix:
-        include:
-        - os: ubuntu-20.04
-          gcc: 10
-          archive-suffix: compatibility
-        - os: ubuntu-22.04
-          gcc: 12
-          archive-suffix: performance
-    runs-on: ${{ (matrix.os == 'ubuntu-20.04' && ((vars.LINUX_COMPATIBILITY_RUNNER && fromJSON(vars.LINUX_COMPATIBILITY_RUNNER)) || matrix.os)) || (matrix.os == 'ubuntu-22.04' && ((vars.LINUX_PERFORMANCE_RUNNER && fromJSON(vars.LINUX_PERFORMANCE_RUNNER)) || matrix.os)) }}
+    runs-on: macos-14
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: true
-    - name: Debug system
-      run: |
-        uname -a
-        cmake --version
-        ninja --version
-        curl --version
-    - name: Install dependencies
-      if: ${{ (matrix.os == 'ubuntu-20.04' && !vars.LINUX_COMPATIBILITY_RUNNER) || (matrix.os == 'ubuntu-22.04' && !vars.LINUX_PERFORMANCE_RUNNER) }}
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential libbz2-dev python3-dev zlib1g-dev libboost-all-dev gcc-${{ matrix.gcc }} g++-${{ matrix.gcc }} $(cat .github/workflows/apt-deps.txt)
-    - name: Debug compilers
-      run: |
-        gcc --version
-        g++ --version
-        gcc-${{ matrix.gcc }} --version
-        g++-${{ matrix.gcc }} --version
-    - name: Check Boost version
-      if: ${{ (matrix.os == 'ubuntu-20.04' && !vars.LINUX_COMPATIBILITY_RUNNER) || (matrix.os == 'ubuntu-22.04' && !vars.LINUX_PERFORMANCE_RUNNER) }}
-      run: |
-        apt-cache policy libboost-all-dev
-        dpkg -L libboost-all-dev | grep include/boost
     - name: ccache
-      uses: hendrikmuhs/ccache-action@v1.2
+      uses: hendrikmuhs/ccache-action@v1.2.14
       with:
-        key: ${{ matrix.os }}-ccache
-    - name: Install latest SDL
-      if: ${{ (matrix.os == 'ubuntu-20.04' && !vars.LINUX_COMPATIBILITY_RUNNER) || (matrix.os == 'ubuntu-22.04' && !vars.LINUX_PERFORMANCE_RUNNER) }}
+        create-symlink: true
+        key: ${{ runner.os }}-14-ccache-${{ github.ref }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-14-ccache-${{ github.ref }}
+          ${{ runner.os }}-14-ccache-
+    - name: Install gtar wrapper
       run: |
-        export PATH="/usr/lib/ccache:$PATH"
-        wget https://www.libsdl.org/release/SDL2-2.26.1.tar.gz
-        tar -xzf SDL2-2.26.1.tar.gz
-        cd SDL2-2.26.1
-        ./configure
-        make -j 10
-        sudo make install
-        sudo cp -av /usr/local/lib/libSDL* /lib/x86_64-linux-gnu/
-    - name: Install latest SDL_net
-      if: ${{ (matrix.os == 'ubuntu-20.04' && !vars.LINUX_COMPATIBILITY_RUNNER) || (matrix.os == 'ubuntu-22.04' && !vars.LINUX_PERFORMANCE_RUNNER) }}
+        sudo mv /opt/homebrew/bin/gtar /opt/homebrew/bin/gtar.orig
+        sudo cp .github/workflows/gtar /opt/homebrew/bin/gtar
+        sudo chmod +x /opt/homebrew/bin/gtar
+    - name: Cache MacPorts
+      id: cache-macports
+      uses: actions/cache@v4
+      with:
+        path: /opt/local/
+        key: ${{ runner.os }}-14-macports-${{ hashFiles('.github/workflows/macports-deps.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-14-macports-
+    - name: Install MacPorts (if necessary)
       run: |
-        export PATH="/usr/lib/ccache:$PATH"
-        wget https://www.libsdl.org/projects/SDL_net/release/SDL2_net-2.2.0.tar.gz
-        tar -xzf SDL2_net-2.2.0.tar.gz
-        cd SDL2_net-2.2.0
-        ./configure
-        make -j 10
-        sudo make install
-        sudo cp -av /usr/local/lib/libSDL* /lib/x86_64-linux-gnu/
+        if [ -d /opt/local/ ]; then
+          echo "MacPorts already installed"
+        else
+          wget https://github.com/macports/macports-base/releases/download/v2.9.3/MacPorts-2.9.3-14-Sonoma.pkg
+          sudo installer -pkg ./MacPorts-2.9.3-14-Sonoma.pkg -target /
+        fi
+        echo "/opt/local/bin:/opt/local/sbin" >> $GITHUB_PATH
+    - name: Install dependencies
+      run: |
+        brew uninstall --ignore-dependencies libpng
+        sudo port install $(cat .github/workflows/macports-deps.txt)
+        brew install ninja
     - name: Download soh.otr
       uses: actions/download-artifact@v4
       with:
         name: soh.otr
     - name: Build SoH
       run: |
-        export PATH="/usr/lib/ccache:$PATH"
-        for i in {1..3}; do
-          cmake --no-warn-unused-cli -H. -Bbuild-cmake -GNinja -DCMAKE_BUILD_TYPE:STRING=Release -DBUILD_REMOTE_CONTROL=1 -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON && break
-          echo "CMake failed, retrying ($i/3)..."
-          sleep 5
-        done
-        cmake --build build-cmake --config Release -j3 --verbose
-        (cd build-cmake && cpack -G External)
+        cmake --no-warn-unused-cli -H. -Bbuild-cmake -GNinja -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64" -DBUILD_REMOTE_CONTROL=1
+        cmake --build build-cmake --config Release --parallel 10
+        mv soh.otr build-cmake/soh
+        (cd build-cmake && cpack)
+
+        mv _packages/*.dmg SoH.dmg
         mv README.md readme.txt
-        mv build-cmake/*.appimage soh.appimage
-      env:
-        CC: gcc-${{ matrix.gcc }}
-        CXX: g++-${{ matrix.gcc }}
     - name: Upload build
       uses: actions/upload-artifact@v4
       with:
-        name: soh-linux-${{ matrix.archive-suffix }}
+        name: soh-mac
+        path: |
+          SoH.dmg
+          readme.txt
+  build-linux:
+    needs: generate-soh-otr
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y $(cat .github/workflows/apt-deps.txt)
+    - name: ccache
+      uses: hendrikmuhs/ccache-action@v1.2.14
+      with:
+        key: linux-ccache-${{ github.ref }}-${{ github.sha }}
+        restore-keys: |
+          linux-ccache-${{ github.ref }}
+          linux-ccache-
+    - name: Cache build folders
+      uses: actions/cache@v4
+      with:
+        key: linux-build-${{ github.ref }}-${{ github.sha }}
+        restore-keys: |
+          linux-build-${{ github.ref }}
+          linux-build-
+        path: |
+          SDL2-2.30.3
+          SDL2_net-2.2.0
+          tinyxml2-10.0.0
+          libzip-1.10.1
+    - name: Install latest SDL
+      run: |
+        export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+        if [ ! -d "SDL2-2.30.3" ]; then
+          wget https://www.libsdl.org/release/SDL2-2.30.3.tar.gz
+          tar -xzf SDL2-2.30.3.tar.gz
+        fi
+        cd SDL2-2.30.3
+        ./configure --enable-hidapi-libusb
+        make -j 10
+        sudo make install
+        sudo cp -av /usr/local/lib/libSDL* /lib/x86_64-linux-gnu/
+    - name: Install latest SDL_net
+      run: |
+        export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+        if [ ! -d "SDL2_net-2.2.0" ]; then
+          wget https://www.libsdl.org/projects/SDL_net/release/SDL2_net-2.2.0.tar.gz
+          tar -xzf SDL2_net-2.2.0.tar.gz
+        fi
+        cd SDL2_net-2.2.0
+        ./configure
+        make -j 10
+        sudo make install
+        sudo cp -av /usr/local/lib/libSDL* /lib/x86_64-linux-gnu/
+    - name: Install latest tinyxml2
+      run: |
+        sudo apt-get remove libtinyxml2-dev
+        export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+        if [ ! -d "tinyxml2-10.0.0" ]; then
+          wget https://github.com/leethomason/tinyxml2/archive/refs/tags/10.0.0.tar.gz
+          tar -xzf 10.0.0.tar.gz
+        fi
+        cd tinyxml2-10.0.0
+        mkdir -p build
+        cd build
+        cmake ..
+        make
+        sudo make install
+    - name: Install libzip without crypto
+      run: |
+        export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+        if [ ! -d "libzip-1.10.1" ]; then
+          wget https://github.com/nih-at/libzip/releases/download/v1.10.1/libzip-1.10.1.tar.gz
+          tar -xzf libzip-1.10.1.tar.gz
+        fi
+        cd libzip-1.10.1
+        mkdir -p build
+        cd build
+        cmake .. -DENABLE_COMMONCRYPTO=OFF -DENABLE_GNUTLS=OFF -DENABLE_MBEDTLS=OFF -DENABLE_OPENSSL=OFF
+        make
+        sudo make install
+        sudo cp -av /usr/local/lib/libzip* /lib/x86_64-linux-gnu/
+    - name: Download soh.otr
+      uses: actions/download-artifact@v4
+      with:
+        name: soh.otr
+    - name: Build SoH
+      run: |
+        export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+        cmake --no-warn-unused-cli -H. -Bbuild-cmake -GNinja -DCMAKE_BUILD_TYPE:STRING=Release -DBUILD_REMOTE_CONTROL=1
+        cmake --build build-cmake --config Release -j3
+        (cd build-cmake && cpack -G External)
+
+        mv README.md readme.txt
+        mv build-cmake/*.appimage soh.appimage
+      env:
+        CC: gcc-12
+        CXX: g++-12
+    - name: Upload build
+      uses: actions/upload-artifact@v4
+      with:
+        name: soh-linux
         path: |
           soh.appimage
           readme.txt
@@ -154,56 +246,49 @@ jobs:
       run: |
         choco install ninja
         Remove-Item -Path "C:\ProgramData\Chocolatey\bin\ccache.exe" -Force -ErrorAction SilentlyContinue
-    - name: Debug environment
-      run: |
-        choco list --local
-        ninja --version
-        cmake --version
-        dir ${{github.workspace}}\vcpkg
     - uses: actions/checkout@v4
       with:
         submodules: true
     - name: ccache
-      uses: hendrikmuhs/ccache-action@v1.2
+      uses: hendrikmuhs/ccache-action@v1.2.14
       with:
-        key: ${{ runner.os }}-ccache
-    - name: Setup vcpkg
-      uses: lukka/get-cmake@latest
-    - name: Run vcpkg
-      uses: lukka/run-vcpkg@v11
+        variant: sccache
+        max-size: "1G"
+        key: ${{ runner.os }}-ccache-${{ github.ref }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-ccache-${{ github.ref }}
+          ${{ runner.os }}-ccache-
+    - name: Cache build folder
+      uses: actions/cache@v4
       with:
-        vcpkgDirectory: ${{ github.workspace }}/vcpkg
-        vcpkgJsonGlob: '**/vcpkg.json'
-        vcpkgGitCommitId: 'HEAD'
-        doNotCache: false
-        vcpkgTriplet: x64-windows-static
-        vcpkgArguments: zlib bzip2 libpng sdl2 sdl2-net glew glfw3 boost
-    - name: Verify vcpkg
-      run: |
-        dir ${{github.workspace}}\vcpkg\installed\x64-windows-static
-        ${{github.workspace}}\vcpkg\vcpkg list
+        key: ${{ runner.os }}-build-${{ github.ref }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-build-${{ github.ref }}
+          ${{ runner.os }}-build-
+        path: |
+          build-windows
+          vcpkg
     - name: Configure Developer Command Prompt
       uses: ilammy/msvc-dev-cmd@v1
     - name: Build SoH
       env: 
         VCPKG_ROOT: ${{github.workspace}}/vcpkg
       run: |
-        set $env:PATH="$env:USERPROFILE/.cargo/bin;$env:PATH"
-        cmake -S . -B build-windows -G Ninja -DCMAKE_MAKE_PROGRAM=ninja -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_C_COMPILER_LAUNCHER=ccache -CMAKE_CXX_COMPILER_LAUNCHER=ccache -DBUILD_REMOTE_CONTROL=1 -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DCMAKE_TOOLCHAIN_FILE=${{github.workspace}}/vcpkg/scripts/buildsystems/vcpkg.cmake
-        if (-Not (Test-Path build-windows/build.ninja)) { Write-Error "build.ninja not found"; exit 1 }
-        cmake --build build-windows --config Release --parallel 10 --verbose
-        if (-Not (Test-Path build-windows/soh.exe)) { Write-Error "soh.exe not found"; exit 1 }
+        $env:PATH="$env:USERPROFILE/.cargo/bin;$env:PATH"
+        cmake -S . -B build-windows -G Ninja -DCMAKE_MAKE_PROGRAM=ninja -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache -DBUILD_REMOTE_CONTROL=1
+        cmake --build build-windows --config Release --parallel 10
+
         mkdir soh-windows
-        mv build-windows/soh.exe soh-windows/soh.exe
+        mv ./x64/Release/soh.exe ./soh-windows/soh.exe
         mkdir soh-windows/debug
         mkdir soh-windows/mods
         New-Item soh-windows/mods/custom_otr_files_go_here.txt -type file
-        mv build-windows/soh.pdb soh-windows/debug/soh.pdb
-        mv README.md soh-windows/readme.txt
-        mv build-windows/gamecontrollerdb.txt soh-windows/gamecontrollerdb.txt
-        mv build-windows/assets soh-windows
+        mv ./x64/Release/soh.pdb ./soh-windows/debug/soh.pdb
+        mv ./README.md ./soh-windows/readme.txt
+        mv ./build-windows/gamecontrollerdb.txt ./soh-windows/gamecontrollerdb.txt
+        mv ./x64/Release/assets ./soh-windows
     - name: Download soh.otr
-      uses: actions/upload-artifact@v4
+      uses: actions/download-artifact@v4
       with:
         name: soh.otr
         path: soh-windows
