@@ -128,16 +128,26 @@ jobs:
         - os: ubuntu-22.04
           gcc: 12
           archive-suffix: performance
-    runs-on: ${{ (matrix.os == 'ubuntu-20.04' && ((vars.LINUX_COMPATIBILITY_RUNNER && fromJSON(vars.LINUX_COMPATIBILITY_RUNNER)) || matrix.os)) || (matrix.os == 'ubuntu-22.04' && ((vars.LINUX_PERFORMANCE_RUNNER && fromJSON(vars.LINUX_PERFORMANCE_RUNNER)) || matrix.os)) }}
+    runs-on: ubuntu-latest # Temporary for testing; revert to original after confirming
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: true
+    - name: Debug system
+      run: |
+        uname -a
+        cmake --version
+        ninja --version
+        curl --version
     - name: Install dependencies
       if: ${{ (matrix.os == 'ubuntu-20.04' && !vars.LINUX_COMPATIBILITY_RUNNER) || (matrix.os == 'ubuntu-22.04' && !vars.LINUX_PERFORMANCE_RUNNER) }}
       run: |
         sudo apt-get update
-        sudo apt-get install -y $(cat .github/workflows/apt-deps.txt)
+        sudo apt-get install -y build-essential libbz2-dev python3-dev zlib1g-dev libboost-all-dev $(cat .github/workflows/apt-deps.txt)
+    - name: Check Boost version
+      if: ${{ (matrix.os == 'ubuntu-20.04' && !vars.LINUX_COMPATIBILITY_RUNNER) || (matrix.os == 'ubuntu-22.04' && !vars.LINUX_PERFORMANCE_RUNNER) }}
+      run: |
+        apt-cache policy libboost-all-dev
     - name: ccache
       uses: hendrikmuhs/ccache-action@v1.2
       with:
@@ -154,7 +164,7 @@ jobs:
         sudo make install
         sudo cp -av /usr/local/lib/libSDL* /lib/x86_64-linux-gnu/
     - name: Install latest SDL_net
-      if: ${{ (matrix.os == 'ubuntu- MOE -v4.0.3' && !vars.LINUX_PERFORMANCE_RUNNER) || (matrix.os == 'ubuntu-22.04' && !vars.LINUX_PERFORMANCE_RUNNER) }}
+      if: ${{ (matrix.os == 'ubuntu-20.04' && !vars.LINUX_COMPATIBILITY_RUNNER) || (matrix.os == 'ubuntu-22.04' && !vars.LINUX_PERFORMANCE_RUNNER) }}
       run: |
         export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
         wget https://www.libsdl.org/projects/SDL_net/release/SDL2_net-2.2.0.tar.gz
@@ -216,7 +226,7 @@ jobs:
         VCPKG_ROOT: ${{github.workspace}}/vcpkg
       run: |
         set $env:PATH="$env:USERPROFILE/.cargo/bin;$env:PATH"
-        cmake -S . -B build-windows -G Ninja -DCMAKE_MAKE_PROGRAM=ninja -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_C_COMPILER_LAUNCHER=ccache -CMAKE_CXX_COMPILER_LAUNCHER=ccache -DBUILD_REMOTE_CONTROL=1
+        cmake -S . -B build-windows -G Ninja -DCMAKE_MAKE_PROGRAM=ninja -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DBUILD_REMOTE_CONTROL=1
         cmake --build build-windows --config Release --parallel 10
 
         mkdir soh-windows
@@ -234,7 +244,7 @@ jobs:
         name: soh.otr
         path: soh-windows
     - name: Upload build
-      uses: actions/upload-ovable-artifact@v4
+      uses: actions/upload-artifact@v4
       with:
         name: soh-windows
         path: soh-windows
