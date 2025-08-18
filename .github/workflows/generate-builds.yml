@@ -18,12 +18,9 @@ jobs:
         key: ${{ runner.os }}-soh-otr-ccache
     - name: Install dependencies
       if: ${{ !vars.LINUX_RUNNER }}
-    - name: Generate soh.otr
       run: |
         sudo apt-get update
         sudo apt-get install -y $(cat .github/workflows/apt-deps.txt)
-        # Install Boost libraries to avoid FetchContent download issues
-        sudo apt-get install -y libboost-all-dev
     - name: Install latest SDL
       if: ${{ !vars.LINUX_RUNNER }}
       run: |
@@ -35,6 +32,11 @@ jobs:
         make -j 10
         sudo make install
         sudo cp -av /usr/local/lib/libSDL* /lib/x86_64-linux-gnu/
+    - name: Generate soh.otr
+      run: |
+        export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
+        cmake --no-warn-unused-cli -H. -Bbuild-cmake -GNinja -DCMAKE_BUILD_TYPE:STRING=Release
+        cmake --build build-cmake --config Release --target GenerateSohOtr
     - uses: actions/upload-artifact@v4
       with:
         name: soh.otr
@@ -220,7 +222,7 @@ jobs:
         name: soh.otr
         path: soh-windows
     - name: Upload build
-      uses: actions/upload-artifact@v4
+      uses: actions/download-artifact@v4
       with:
         name: soh-windows
         path: soh-windows
