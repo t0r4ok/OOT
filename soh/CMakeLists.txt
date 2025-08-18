@@ -724,7 +724,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "NintendoSwitch")
         Threads::Threads
     )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "CafeOS")
-    find_package(SDL2 REQUIRED)
+    find_package(SDL2 CONFIG REQUIRED)
     set(ADDITIONAL_LIBRARY_DEPENDENCIES
         "libultraship;"
         SDL2::SDL2-static
