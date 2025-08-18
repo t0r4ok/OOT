@@ -194,9 +194,9 @@ jobs:
     - name: vcpkg
       uses: johnwason/vcpkg-action@v5
       with:
-        pkgs: zlib bzip2 libpng sdl2[core,vulkan] sdl2-net glew glfw3 boost-system boost-filesystem boost-program-options boost-thread
+        pkgs: zlib bzip2 libpng sdl2 sdl2-net glew glfw3 boost-system boost-filesystem boost-program-options boost-thread
         token: ${{ github.token }}
-        triplet: 'x64-windows-static'
+        triplet: x64-windows-static
     - name: Configure Developer Command Prompt
       uses: ilammy/msvc-dev-cmd@v1
     - name: Build SoH
@@ -204,7 +204,14 @@ jobs:
         VCPKG_ROOT: ${{github.workspace}}/vcpkg
       run: |
         set $env:PATH="$env:USERPROFILE/.cargo/bin;$env:PATH"
-        cmake -S . -B build-windows -G Ninja -DCMAKE_MAKE_PROGRAM=ninja -DCMAKE_BUILD_TYPE:STRING=Release -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DBUILD_REMOTE_CONTROL=1 -DCMAKE_TOOLCHAIN_FILE="${{github.workspace}}/vcpkg/scripts/buildsystems/vcpkg.cmake"
+        cmake -S . -B build-windows -G Ninja `
+          -DCMAKE_MAKE_PROGRAM=ninja `
+          -DCMAKE_BUILD_TYPE:STRING=Release `
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache `
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache `
+          -DBUILD_REMOTE_CONTROL=1 `
+          -DCMAKE_TOOLCHAIN_FILE="${{github.workspace}}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+          -DVCPKG_TARGET_TRIPLET=x64-windows-static
         cmake --build build-windows --config Release --parallel 10
 
         mkdir soh-windows
@@ -222,7 +229,7 @@ jobs:
         name: soh.otr
         path: soh-windows
     - name: Upload build
-      uses: actions/download-artifact@v4
-      with:
+      uses: actions/upload-artifact@v4
+      with:   # <-- FIXED (was download before)
         name: soh-windows
         path: soh-windows
